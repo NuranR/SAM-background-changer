@@ -41,9 +41,9 @@ class SAMBackgroundChanger:
     def _load_model(self):
         """Load the SAM 2 model"""
         try:
-            # SAM 2 model configuration
+            # SAM 2.1 model configuration
             sam2_checkpoint = self.model_path
-            model_cfg = "sam2_hiera_s.yaml"  # Small model config
+            model_cfg = "configs/sam2.1/sam2.1_hiera_s.yaml"  # Small model config for SAM 2.1
             
             predictor = build_sam2_video_predictor(model_cfg, sam2_checkpoint, device=self.device)
             return predictor
