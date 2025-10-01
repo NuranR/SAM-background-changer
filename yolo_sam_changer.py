@@ -20,6 +20,12 @@ class YoloSamChanger:
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
         print(f"Using device: {self.device}")
         
+        if torch.cuda.is_available():
+            print(f"GPU Name: {torch.cuda.get_device_name(0)}")
+            print(f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1024**3:.1f} GB")
+            # Clear GPU cache for optimal performance
+            torch.cuda.empty_cache()
+        
         # --- Stage 1 Model: YOLOv8 for Detection ---
         print("Loading YOLOv8 detector model...")
         try:
@@ -37,6 +43,20 @@ class YoloSamChanger:
         except Exception as e:
             print(f"Error loading SAM model: {e}")
             raise
+            
+        # Warm up the models with dummy inference to initialize GPU
+        if torch.cuda.is_available():
+            print("Warming up models on GPU...")
+            dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+            
+            # Warm up YOLO
+            _ = self.yolo_detector(dummy_frame, device=self.device, verbose=False)
+            
+            # Warm up SAM with a dummy box
+            dummy_box = [[100, 100, 200, 200]]  # x1, y1, x2, y2
+            _ = self.sam_segmenter(dummy_frame, bboxes=dummy_box, device=self.device, verbose=False)
+            
+            print("✓ GPU warm-up complete!")
         
         # Load background and initialize webcam
         self.background = self._load_background()
@@ -130,7 +150,16 @@ class YoloSamChanger:
             start_time = time.time()
 
             # --- Stage 1: Run YOLO Detection ---
-            yolo_results = self.yolo_detector(frame, classes=[0], conf=self.confidence, verbose=False)
+            # Explicitly specify device and optimize for speed
+            yolo_results = self.yolo_detector(
+                frame, 
+                classes=[0], 
+                conf=self.confidence, 
+                device=self.device,
+                verbose=False,
+                imgsz=640,  # Optimize input size
+                half=True if self.device == 'cuda' else False  # Use FP16 on GPU for speed
+            )
             
             # Extract person bounding boxes
             person_boxes = []
@@ -143,19 +172,23 @@ class YoloSamChanger:
             final_mask = np.zeros((frame.shape[0], frame.shape[1]), dtype=np.uint8)
             
             if len(person_boxes) > 0:
-                print(f"Frame {frame_count}: YOLO detected {len(person_boxes)} person(s)")
+                if frame_count % 10 == 1:  # Reduce print frequency
+                    print(f"Frame {frame_count}: YOLO detected {len(person_boxes)} person(s)")
                 
                 # --- Stage 2: Run SAM Segmentation ---
                 try:
-                    # Convert bounding boxes to the format SAM expects
-                    boxes_tensor = torch.tensor(person_boxes, device=self.device)
-                    
-                    # Run SAM with bounding box prompts
-                    sam_results = self.sam_segmenter(frame, bboxes=boxes_tensor, verbose=False)
+                    # Run SAM with bounding box prompts, explicitly on GPU
+                    sam_results = self.sam_segmenter(
+                        frame, 
+                        bboxes=person_boxes, 
+                        device=self.device,
+                        verbose=False
+                    )
                     
                     # Process SAM results
                     if sam_results[0].masks is not None:
-                        print(f"Frame {frame_count}: SAM generated {len(sam_results[0].masks.data)} mask(s)")
+                        if frame_count % 10 == 1:  # Reduce print frequency
+                            print(f"Frame {frame_count}: SAM generated {len(sam_results[0].masks.data)} mask(s)")
                         
                         # Combine all masks from SAM into one
                         for mask_tensor in sam_results[0].masks.data:
