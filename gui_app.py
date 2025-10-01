@@ -16,20 +16,28 @@ class BackgroundChangerGUI:
         Modern GUI application for YOLO+SAM Background Changer
         """
         self.root = root
-        self.root.title("AI Background Changer - YOLO+SAM")
+        self.root.title("AI Background Changer")
         
         # Make window maximized
         self.root.state('zoomed')
+        self.root.configure(bg='#1a1a1a')
         
         # Application state
         self.mode = 'replace'
-        self.show_debug = False
         self.current_bg_index = 0
         self.is_running = True
         self.confidence = 0.5
+        self.last_frame = None
+        
+        # Scan backgrounds early to prevent duplicate counting
+        self.background_files = self._scan_backgrounds()
+        self.background = None
         
         # GPU setup
         self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        
+        # Create Tkinter variables before UI setup
+        self.mode_var = tk.StringVar(value='replace')
         
         # Setup UI first
         self._setup_ui()
@@ -40,121 +48,130 @@ class BackgroundChangerGUI:
         
     def _setup_ui(self):
         """Create the GUI layout"""
-        # Main container
-        main_frame = tk.Frame(self.root, bg='#2b2b2b')
-        main_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        # Main container with elegant dark theme
+        main_frame = tk.Frame(self.root, bg='#1a1a1a')
+        main_frame.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         
-        # Left side - Video feed (720p: 1280x720)
-        video_frame = tk.Frame(main_frame, bg='#000000', width=1280, height=720)
-        video_frame.pack(side=tk.LEFT, padx=(0, 10))
+        # Left side - Video feed (720p: 1280x720) with subtle border
+        video_container = tk.Frame(main_frame, bg='#0a0a0a', highlightbackground='#333333', 
+                                   highlightthickness=1)
+        video_container.pack(side=tk.LEFT, padx=(0, 15))
+        
+        video_frame = tk.Frame(video_container, bg='#000000', width=1280, height=720)
+        video_frame.pack(padx=2, pady=2)
         video_frame.pack_propagate(False)
         
         self.video_label = tk.Label(video_frame, bg='#000000')
         self.video_label.pack(expand=True)
         
-        # Right side - Control panel
-        control_frame = tk.Frame(main_frame, bg='#1e1e1e', width=350)
+        # Right side - Elegant Control panel
+        control_frame = tk.Frame(main_frame, bg='#242424', width=380)
         control_frame.pack(side=tk.RIGHT, fill=tk.BOTH)
         control_frame.pack_propagate(False)
         
-        # Title
-        title = tk.Label(control_frame, text="AI Background Changer", 
-                        font=('Segoe UI', 18, 'bold'), bg='#1e1e1e', fg='#ffffff')
-        title.pack(pady=(20, 10))
+        # Elegant Title with icon
+        title_frame = tk.Frame(control_frame, bg='#242424')
+        title_frame.pack(pady=(30, 5))
         
-        subtitle = tk.Label(control_frame, text="YOLO Detection + SAM Segmentation", 
-                           font=('Segoe UI', 9), bg='#1e1e1e', fg='#888888')
-        subtitle.pack(pady=(0, 20))
+        # title = tk.Label(title_frame, text="AI Background Changer", 
+        #                 font=('Segoe UI', 20, 'bold'), bg='#242424', fg='#ffffff')
+        # title.pack()
         
-        # Status section
-        status_frame = tk.LabelFrame(control_frame, text="Status", 
-                                     bg='#1e1e1e', fg='#ffffff', font=('Segoe UI', 10, 'bold'))
-        status_frame.pack(fill=tk.X, padx=20, pady=10)
+        # Status section with modern minimal design
+        status_label_header = tk.Label(control_frame, text="Status", 
+                                      font=('Segoe UI', 12, 'bold'), bg='#242424', fg='#ffffff')
+        status_label_header.pack(pady=(30, 10))
         
-        self.status_label = tk.Label(status_frame, text="Initializing...", 
-                                     bg='#1e1e1e', fg='#00ff00', font=('Segoe UI', 9))
-        self.status_label.pack(pady=10, padx=10)
+        status_container = tk.Frame(control_frame, bg='#2d2d2d', highlightbackground='#3d3d3d', highlightthickness=1)
+        status_container.pack(fill=tk.X, padx=30, pady=(0, 10))
         
-        self.fps_label = tk.Label(status_frame, text="FPS: --", 
-                                  bg='#1e1e1e', fg='#ffff00', font=('Segoe UI', 9))
-        self.fps_label.pack(pady=(0, 10), padx=10)
+        self.status_label = tk.Label(status_container, text="Initializing...", 
+                                     bg='#2d2d2d', fg='#5dc461', font=('Segoe UI', 10))
+        self.status_label.pack(pady=12, padx=15)
         
-        # Mode selection section
-        mode_frame = tk.LabelFrame(control_frame, text="Background Mode", 
-                                   bg='#1e1e1e', fg='#ffffff', font=('Segoe UI', 10, 'bold'))
-        mode_frame.pack(fill=tk.X, padx=20, pady=10)
+        self.fps_label = tk.Label(status_container, text="FPS: --", 
+                                  bg='#2d2d2d', fg='#ffd966', font=('Segoe UI', 10))
+        self.fps_label.pack(pady=(0, 12), padx=15)
         
-        btn_style = {'font': ('Segoe UI', 10), 'width': 25, 'height': 2}
+        # Mode selection with elegant radio buttons
+        mode_label = tk.Label(control_frame, text="Background Mode", 
+                             font=('Segoe UI', 12, 'bold'), bg='#242424', fg='#ffffff')
+        mode_label.pack(pady=(30, 15))
         
-        self.btn_replace = tk.Button(mode_frame, text="🖼️ Replace Background", 
-                                     command=lambda: self.set_mode('replace'),
-                                     bg='#0078d4', fg='white', **btn_style)
-        self.btn_replace.pack(pady=5, padx=10)
+        mode_container = tk.Frame(control_frame, bg='#242424')
+        mode_container.pack(fill=tk.X, padx=30)
         
-        self.btn_blur = tk.Button(mode_frame, text="🌫️ Blur Background", 
-                                 command=lambda: self.set_mode('blur'),
-                                 bg='#404040', fg='white', **btn_style)
-        self.btn_blur.pack(pady=5, padx=10)
+        modes = [
+            ("     Replace", "replace"),
+            ("       Blur ", "blur"),
+            (" Green Screen", "green_screen")
+        ]
         
-        self.btn_green = tk.Button(mode_frame, text="🟢 Green Screen", 
-                                  command=lambda: self.set_mode('green_screen'),
-                                  bg='#404040', fg='white', **btn_style)
-        self.btn_green.pack(pady=5, padx=10)
+        for text, mode in modes:
+            btn = tk.Radiobutton(mode_container, text=text, variable=self.mode_var, value=mode,
+                                font=('Segoe UI', 11), bg='#242424', fg='#e8e8e8',
+                                selectcolor='#0078d4', activebackground='#242424',
+                                activeforeground='#ffffff', relief=tk.FLAT,
+                                indicatoron=True, anchor='w', padx=5, pady=8,
+                                command=self.set_mode, cursor='hand2')
+            btn.pack(fill=tk.X, pady=2)
         
         # Background selection (only visible in replace mode)
-        self.bg_frame = tk.LabelFrame(control_frame, text="Background Images", 
-                                      bg='#1e1e1e', fg='#ffffff', font=('Segoe UI', 10, 'bold'))
-        self.bg_frame.pack(fill=tk.X, padx=20, pady=10)
+        bg_label_header = tk.Label(control_frame, text="Background Images", 
+                                  font=('Segoe UI', 12, 'bold'), bg='#242424', fg='#ffffff')
+        bg_label_header.pack(pady=(30, 15))
+        
+        self.bg_frame = tk.Frame(control_frame, bg='#242424')
+        self.bg_frame.pack(fill=tk.X, padx=30)
         
         self.bg_label = tk.Label(self.bg_frame, text="No backgrounds found", 
-                                bg='#1e1e1e', fg='#888888', font=('Segoe UI', 9))
-        self.bg_label.pack(pady=10)
+                                bg='#242424', fg='#888888', font=('Segoe UI', 10))
+        self.bg_label.pack(pady=(0, 12))
         
-        self.btn_prev_bg = tk.Button(self.bg_frame, text="◀ Previous", 
-                                     command=self.prev_background,
-                                     bg='#404040', fg='white', font=('Segoe UI', 9), width=12)
-        self.btn_prev_bg.pack(side=tk.LEFT, padx=(10, 5), pady=5)
+        # # Navigation buttons container
         
-        self.btn_next_bg = tk.Button(self.bg_frame, text="Next ▶", 
-                                     command=self.next_background,
-                                     bg='#404040', fg='white', font=('Segoe UI', 9), width=12)
-        self.btn_next_bg.pack(side=tk.RIGHT, padx=(5, 10), pady=5)
-        
-        # Settings section
-        settings_frame = tk.LabelFrame(control_frame, text="Settings", 
-                                       bg='#1e1e1e', fg='#ffffff', font=('Segoe UI', 10, 'bold'))
-        settings_frame.pack(fill=tk.X, padx=20, pady=10)
-        
-        # Debug toggle
-        self.debug_var = tk.BooleanVar()
-        debug_check = tk.Checkbutton(settings_frame, text="Show Debug Info (Bounding Boxes)", 
-                                     variable=self.debug_var, command=self.toggle_debug,
-                                     bg='#1e1e1e', fg='#ffffff', selectcolor='#404040',
-                                     font=('Segoe UI', 9))
-        debug_check.pack(pady=10, padx=10, anchor='w')
+        # self.btn_next_bg.pack(side=tk.LEFT)
+        nav_frame = tk.Frame(self.bg_frame, bg='#242424')
+        nav_frame.pack(pady=(0, 10), fill="x")
+
+        nav_frame.columnconfigure(0, weight=1)
+        nav_frame.columnconfigure(1, weight=1)
+
+        self.btn_prev_bg = tk.Button(nav_frame, text="◀ Prev",
+                             command=self.prev_background,
+                             bg='#3a3a3a', fg='white', font=('Segoe UI', 10),
+                             relief=tk.FLAT, cursor='hand2')
+        self.btn_prev_bg.grid(row=0, column=0, sticky="ew", padx=(0, 4))
+
+        self.btn_next_bg = tk.Button(nav_frame, text="Next ▶",
+                             command=self.next_background,
+                             bg='#3a3a3a', fg='white', font=('Segoe UI', 10),
+                             relief=tk.FLAT, cursor='hand2')
+        self.btn_next_bg.grid(row=0, column=1, sticky="ew", padx=(4, 0))
+
         
         # Actions section
-        action_frame = tk.LabelFrame(control_frame, text="Actions", 
-                                     bg='#1e1e1e', fg='#ffffff', font=('Segoe UI', 10, 'bold'))
-        action_frame.pack(fill=tk.X, padx=20, pady=10)
+        action_label = tk.Label(control_frame, text="Actions", 
+                               font=('Segoe UI', 12, 'bold'), bg='#242424', fg='#ffffff')
+        action_label.pack(pady=(30, 15))
         
-        self.btn_save = tk.Button(action_frame, text="📷 Save Frame", 
+        action_frame = tk.Frame(control_frame, bg='#242424')
+        action_frame.pack(fill=tk.X, padx=30)
+        
+        self.btn_save = tk.Button(action_frame, text="📷  Save Photo", 
                                  command=self.save_frame,
-                                 bg='#107c10', fg='white', **btn_style)
-        self.btn_save.pack(pady=5, padx=10)
+                                 bg='#107c10', fg='white', font=('Segoe UI', 11),
+                                 relief=tk.FLAT, padx=20, pady=10, cursor='hand2')
+        self.btn_save.pack(pady=5)
         
         # Info section at bottom
-        info_frame = tk.Frame(control_frame, bg='#1e1e1e')
-        info_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=20, pady=20)
+        info_frame = tk.Frame(control_frame, bg='#242424')
+        info_frame.pack(side=tk.BOTTOM, fill=tk.X, padx=30, pady=25)
         
         gpu_text = f"GPU: {torch.cuda.get_device_name(0) if torch.cuda.is_available() else 'CPU'}"
         gpu_label = tk.Label(info_frame, text=gpu_text, 
-                            bg='#1e1e1e', fg='#888888', font=('Segoe UI', 8))
+                            bg='#242424', fg='#707070', font=('Segoe UI', 9))
         gpu_label.pack()
-        
-        version_label = tk.Label(info_frame, text="Version 1.0 - High Quality Mode", 
-                                bg='#1e1e1e', fg='#888888', font=('Segoe UI', 8))
-        version_label.pack()
         
     def _initialize_models(self):
         """Initialize YOLO and SAM models"""
@@ -177,8 +194,7 @@ class BackgroundChangerGUI:
                 _ = self.yolo_detector(dummy, device=self.device, verbose=False)
                 _ = self.sam_segmenter(dummy, bboxes=[[100, 100, 200, 200]], device=self.device, verbose=False)
             
-            # Scan backgrounds
-            self.background_files = self._scan_backgrounds()
+            # Update background display (already scanned in __init__)
             self._update_bg_display()
             
             # Load first background
@@ -202,22 +218,22 @@ class BackgroundChangerGUI:
             self.status_label.config(text=f"Error: {str(e)}", fg='#ff0000')
             
     def _scan_backgrounds(self):
-        """Scan backgrounds directory"""
+        """Scan backgrounds directory (case-insensitive, no duplicates)"""
         bg_dir = Path('backgrounds')
         if not bg_dir.exists():
             bg_dir.mkdir()
         
-        exts = ['.jpg', '.jpeg', '.png', '.bmp']
+        # Get all image files, case-insensitive
         files = []
-        for ext in exts:
-            files.extend(bg_dir.glob(f'*{ext}'))
-            files.extend(bg_dir.glob(f'*{ext.upper()}'))
+        for f in bg_dir.iterdir():
+            if f.suffix.lower() in ['.jpg', '.jpeg', '.png', '.bmp']:
+                files.append(str(f))
         
-        files = sorted([str(f) for f in files])
+        files = sorted(files)
         if not files and os.path.exists('background.jpg'):
             files = ['background.jpg']
         
-        return files if files else []
+        return files
     
     def _load_background(self):
         """Load current background image"""
@@ -246,21 +262,9 @@ class BackgroundChangerGUI:
         else:
             self.bg_label.config(text="No backgrounds found\nAdd images to 'backgrounds' folder", fg='#888888')
     
-    def set_mode(self, mode):
-        """Change background mode"""
-        self.mode = mode
-        
-        # Update button colors
-        all_btns = [self.btn_replace, self.btn_blur, self.btn_green]
-        for btn in all_btns:
-            btn.config(bg='#404040')
-        
-        if mode == 'replace':
-            self.btn_replace.config(bg='#0078d4')
-        elif mode == 'blur':
-            self.btn_blur.config(bg='#0078d4')
-        elif mode == 'green_screen':
-            self.btn_green.config(bg='#0078d4')
+    def set_mode(self):
+        """Change background mode based on radio button selection"""
+        self.mode = self.mode_var.get()
     
     def prev_background(self):
         """Previous background"""
@@ -269,7 +273,8 @@ class BackgroundChangerGUI:
             self.background = self._load_background()
             self._update_bg_display()
             if self.mode != 'replace':
-                self.set_mode('replace')
+                self.mode_var.set('replace')
+                self.set_mode()
     
     def next_background(self):
         """Next background"""
@@ -278,17 +283,23 @@ class BackgroundChangerGUI:
             self.background = self._load_background()
             self._update_bg_display()
             if self.mode != 'replace':
-                self.set_mode('replace')
+                self.mode_var.set('replace')
+                self.set_mode()
     
-    def toggle_debug(self):
-        """Toggle debug mode"""
-        self.show_debug = self.debug_var.get()
+
     
     def save_frame(self):
-        """Save current frame"""
+        """Save current frame to captures directory"""
         if hasattr(self, 'current_frame'):
+            # Create captures directory if it doesn't exist
+            captures_dir = Path('captures')
+            captures_dir.mkdir(exist_ok=True)
+            
+            # Save with timestamp
             filename = f"capture_{int(time.time())}.jpg"
-            cv2.imwrite(filename, self.current_frame)
+            filepath = captures_dir / filename
+            cv2.imwrite(str(filepath), self.current_frame)
+            
             self.status_label.config(text=f"Saved: {filename}", fg='#00ff00')
             self.root.after(2000, lambda: self.status_label.config(text="Ready! ✓"))
     
@@ -362,12 +373,6 @@ class BackgroundChangerGUI:
                     if m.shape != mask.shape:
                         m = cv2.resize(m, (mask.shape[1], mask.shape[0]))
                     mask = cv2.bitwise_or(mask, (m > 0.5).astype(np.uint8) * 255)
-            
-            # Show debug boxes
-            if self.show_debug:
-                for box in boxes:
-                    x1, y1, x2, y2 = map(int, box)
-                    cv2.rectangle(self.current_frame, (x1, y1), (x2, y2), (0, 255, 255), 2)
         
         return mask
     

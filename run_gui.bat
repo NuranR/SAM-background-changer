@@ -12,6 +12,6 @@ echo.
 echo Starting application...
 echo.
 
-python gui_app.py
+C:\Users\Nuran\miniconda3\Scripts\conda.exe run -p C:\Users\Nuran\miniconda3 --no-capture-output python gui_app.py
 
 pause
