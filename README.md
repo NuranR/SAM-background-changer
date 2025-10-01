@@ -1,101 +1,77 @@
-# SAM 2 Real-Time Background Changer
+# AI Background Changer
 
-A real-time background replacement application using Segment Anything 2 (SAM 2) Small model to identify people in webcam feed and replace backgrounds dynamically.
+Real-time AI-powered background replacement using YOLO detection and SAM segmentation. Professional-grade virtual background system with GPU acceleration.
 
-## 🎯 Features
+## ✨ Features
 
-- **Real-time segmentation** using SAM 2 Small model
-- **Webcam integration** with live background replacement
-- **Interactive selection** - click and drag to select the person
-- **GPU acceleration** support for NVIDIA GTX 1650 MaxQ and higher
-- **Custom backgrounds** - use any image as your new background
+- **High-Quality Segmentation** - YOLO + SAM 2 pipeline for precise edge detection
+- **Three Background Modes**:
+  - 🖼️ Replace Background - Swap with custom images
+  - 🌫️ Blur Background - Professional blur effect
+  - � Green Screen - Chroma key effect
+- **Modern GUI** - Clean interface with 720p video feed
+- **GPU Accelerated** - CUDA support for real-time performance
+- **Easy Background Management** - Add/switch backgrounds on the fly
 
-## 📋 Prerequisites
+## 🚀 Quick Start
 
-- **Hardware**: Windows PC with webcam
-- **GPU**: NVIDIA GTX 1650 MaxQ or better (recommended for real-time performance)
-- **Software**: Python 3.8+ (Python 3.10 recommended)
+### 1. Install Dependencies
 
-## 🚀 Quick Setup
-
-### Step 1: Install Python Environment
-
-Run the automated setup script:
-```cmd
-install_requirements.bat
-```
-
-Or manually create a virtual environment:
-```cmd
-python -m venv venv
-venv\Scripts\activate
+```bash
 pip install -r requirements.txt
-pip install git+https://github.com/facebookresearch/segment-anything-2.git
 ```
 
-### Step 2: Download SAM 2 Model
-
-Download the SAM 2.1 Hiera Small model from Hugging Face:
-
-**Option 1: Direct Download**
-- Visit: https://huggingface.co/facebook/sam2.1-hiera-small
-- Download the `sam2.1_hiera_small.pt` file
-- Place it in the `SAM_Background_Changer` folder
-
-**Option 2: Using Hugging Face CLI**
-```cmd
-pip install huggingface_hub
-python -c "from huggingface_hub import hf_hub_download; hf_hub_download('facebook/sam2.1-hiera-small', 'sam2.1_hiera_small.pt', local_dir='.')"
+For GPU support (recommended):
+```bash
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu118
 ```
 
-**Option 3: Check Model Setup**
-```cmd
-python download_model.py
-```
-This will show you exactly where to place the model file.
+### 2. Download Models
 
-### Step 3: Add Your Background Image
+Download the required models and place them in `models_for_project/`:
+- **YOLOv8n**: `yolov8n.pt` (auto-downloaded by Ultralytics)
+- **SAM 2 Base**: `sam2_b.pt` (auto-downloaded by Ultralytics)
 
-Replace `background.jpg` with your desired background image:
-- **Recommended resolution**: 1920x1080 or 1280x720 (16:9 aspect ratio)
-- **Supported formats**: JPG, PNG
-- **File name**: Must be named `background.jpg`
+### 3. Add Backgrounds
 
-Or create a sample background:
-```cmd
-python create_sample_background.py
-```
+Place your background images in the `backgrounds/` folder:
+- Supported formats: JPG, PNG, BMP
+- Recommended resolution: 1280x720 or higher
+- Multiple backgrounds supported
 
-### Step 4: Run the Application
+### 4. Run the Application
 
-Activate your environment and run:
-```cmd
-venv\Scripts\activate
-python run_webcam.py
+```bash
+python gui_app.py
 ```
 
-## 🎮 How to Use
+## 🎮 Usage
 
-1. **Launch**: A window titled "SAM 2 Background Changer" will open showing your webcam feed
-2. **Select Person**: Click and drag to draw a bounding box around the person you want to track
-3. **Real-time Tracking**: The application will track the person and replace the background automatically
-4. **Controls**:
-   - **Mouse**: Click and drag to select person
-   - **'r' key**: Reset tracking (select a new person)
-   - **'q' key**: Quit the application
+1. **Select Mode** - Choose Replace, Blur, or Green Screen
+2. **Change Background** - Use Previous/Next buttons to cycle through backgrounds
+3. **Capture** - Click "Save Photo" to save current frame to `captures/` folder
+
+The app automatically detects people in the frame and applies the selected effect in real-time.
+
+## 📋 Requirements
+
+- **Python**: 3.9+
+- **GPU**: NVIDIA GPU with CUDA support (recommended)
+- **Webcam**: Any standard webcam
+- **OS**: Windows, Linux, macOS
 
 ## 📁 Project Structure
 
 ```
 SAM_Background_Changer/
-├── background.jpg              # Your background image
-├── sam2.1_hiera_small.pt      # SAM 2 model checkpoint
-├── run_webcam.py              # Main application
-├── download_model.py          # Model download script
-├── create_sample_background.py # Sample background generator
-├── install_requirements.bat   # Windows setup script
-├── requirements.txt           # Python dependencies
-└── README.md                  # This file
+├── gui_app.py              # Main GUI application
+├── backgrounds/            # Background images folder
+├── captures/               # Saved photos folder
+├── models_for_project/     # AI models folder
+│   ├── yolov8n.pt
+│   └── sam2_b.pt
+├── requirements.txt        # Python dependencies
+└── README.md              # This file
 ```
 
 ## ⚙️ Configuration
