@@ -1,14 +1,10 @@
-# SAM 2 Background Changer - Python Requirements
-# Run: pip install -r requirements.txt
+# AI Background Changer - Requirements
+# For GPU support, install PyTorch with CUDA first:
+# pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
 
 torch>=2.0.0
 torchvision>=0.15.0
-torchaudio>=2.0.0
 opencv-python>=4.8.0
 numpy>=1.24.0
 Pillow>=10.0.0
-requests>=2.31.0
-tqdm>=4.65.0
-
-# Install SAM 2 separately with:
-# pip install git+https://github.com/facebookresearch/segment-anything-2.git
+ultralytics>=8.0.0
